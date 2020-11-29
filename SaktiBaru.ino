@@ -1,6 +1,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <EEPROM.h>
+#include <Servo.h>
 #include <WiFiClient.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
@@ -8,8 +9,12 @@
 #include <Adafruit_Fingerprint.h>
 #include <SoftwareSerial.h>
 
+#define relayPin 16
+
 SoftwareSerial mySerial(D5, D6);
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
+uint8_t idx;
+String  idx4;
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -22,6 +27,7 @@ String deviceKey = "DC-49711";
 
 //Data Status
 String statusDoor = "";
+int idxSidikJari;
 
 //Host API
 String getDeviceHost = "http://192.168.100.199/Iot-Sakti/Api/device";
@@ -39,11 +45,23 @@ unsigned long waktuSebelum = 0;
 unsigned long interval2 = 50;
 unsigned long waktuSebelum2 = 0;
 
+//Variabel EEPROM
+#define EEPROM_SIZE 30
+int charLength;
 
+//Variabel Servo
+Servo myServo;
+int pintuTutup = 91;
+int pintuBuka  = 10;
+String statusPintu = "close";
 
 void setup()
 { 
 Serial.begin(9600);
+EEPROM.begin(EEPROM_SIZE);
+
+pinMode(relayPin, OUTPUT);
+digitalWrite(relayPin, 1);
 while (!Serial); 
 lcd.begin();
 
@@ -55,6 +73,8 @@ delay(2000);
 
 finger.begin(57600);
 
+ myServo.attach(D7); 
+ myServo.write(pintuTutup); 
 
 welcome();
 delay(3000);
@@ -91,7 +111,15 @@ void loop()
   
 }
 
+void selenoitOK()
+{
+  digitalWrite(relayPin, LOW);
+ 
+  delay(5000);
+  digitalWrite(relayPin, HIGH);
 
+  delay(500);  
+}
 
 void startLCD()
 {
@@ -111,11 +139,7 @@ void welcome()
 }
 
 
-void selenoitOK()
-{
- 
-    
-}
+
 
 //Function getDevice
 void getDevice()
@@ -178,9 +202,20 @@ if ((unsigned long)(waktuSekarang - waktuSebelum) >= interval)
   deserializeJson(doc, json);
   
   String data = doc["massage"][0]["device_status"];
-      
+         idx  = doc["massage"][0]["id_sidikJari"];
+         
   http.end();
 
+  //input data EEPROM
+  String qsid=data;
+  charLength=qsid.length();
+ 
+   
+    for (int i = 0; i < qsid.length(); ++i)
+        {
+         EEPROM.write(i, qsid[i]);
+        }  
+  //End Input EEPROM  
    if (data == "daftar")
   {
    lcd.clear();
@@ -188,8 +223,6 @@ if ((unsigned long)(waktuSekarang - waktuSebelum) >= interval)
    lcd.print("Mode Device");
    lcd.setCursor(5,1);
    lcd.print("Daftar");
-   
-   
    
   }else if (data == "ready"){
    lcd.clear();
@@ -199,16 +232,88 @@ if ((unsigned long)(waktuSekarang - waktuSebelum) >= interval)
    lcd.print("Ready"); 
   }
   waktuSebelum = millis();
+  
 }
 
 if ((unsigned long)(waktuSekarang2 - waktuSebelum2) >= interval2)
 {
-   getFingerprintID();
-   waktuSebelum2 = millis();
+  if (bacaEEPROM() == "ready")
+  {
+  
+   getFingerprintID(); 
+   
+  }else if(bacaEEPROM() == "daftar")
+  {
+     if (idx == 0){
+       Serial.println("Menunggu Id Sidik Jari Dari server.");
+       lcd.clear();
+       lcd.setCursor(0,0);
+       lcd.print("Menunggu Id Jari");
+       lcd.setCursor(1,1);
+       lcd.print("Dari Server . . .");
+       delay(2000);
+       return;
+      }
+       responDaftar1();
+       Serial.println("Daata Masuk dengan Id Sidik Jari "+idx);
+        Serial.println(idx);
+       lcd.clear();
+       lcd.setCursor(3,0);
+       lcd.print("Data Masuk");
+       lcd.setCursor(0,1);
+       lcd.print("Id Jari adalah "+idx);
+      delay(3000);
+      while (!  getFingerprintEnroll() )
+      {delay(2000);};
+
+      resetDevice();
+
+       lcd.clear();
+       lcd.setCursor(0,0);
+       lcd.print("Daftar Sidik Jari");
+       lcd.setCursor(5,1);
+       lcd.print("Berhasil");
+       delay(2000);
+  }
+  waktuSebelum2 = millis();
 }
 
 }
 
+
+void doorOpen()
+{
+   
+  digitalWrite(relayPin, LOW);
+  delay(2000);
+  myServo.write(pintuBuka);
+  delay(2000);
+  digitalWrite(relayPin, HIGH);
+
+   lcd.clear();
+   lcd.setCursor(3,0);
+   lcd.print("Pintu Berhasil");
+   lcd.setCursor(5,1);
+   lcd.print("DI BUKA");
+   delay(1000);
+}
+
+void doorClose()
+{
+   
+  digitalWrite(relayPin, LOW);
+  delay(2000);
+  myServo.write(pintuTutup);
+  delay(2000);
+  digitalWrite(relayPin, HIGH);
+
+   lcd.clear();
+   lcd.setCursor(3,0);
+   lcd.print("Pintu Berhasil");
+   lcd.setCursor(5,1);
+   lcd.print("DI TUTUP");
+   delay(1000);
+}
 
 String statusDoorOK()
 {
@@ -253,14 +358,15 @@ String statusDoorOK()
 //Fanction taping
 void taping()
 {
-//  statusDoor = statusDoorOK();
-  
+
+  if (idxSidikJari != 0)
+  {
   HTTPClient http;
   http.begin (taapingHost);  
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  String httpRequestData = "device_key="+deviceKey+"&idSidikJari=1"+"&satus_door="+statusDoor;
+  String httpRequestData = "device_key="+deviceKey+"&idSidikJari="+idxSidikJari+"&satus_door="+statusPintu;
   int httpCode = http.POST(httpRequestData);
-   
+  
    
    
   String payload = http.getString();
@@ -283,11 +389,25 @@ void taping()
   lcd.print("Berhasil.");
   lcd.setCursor(2,1);
   lcd.print("Welcome");
+  }
 }
 
-//Function daftar
-void daftar()
+void tapingFlase()
 {
+
+  HTTPClient http;
+  http.begin (taapingHost);  
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  String httpRequestData = "device_key="+deviceKey+"&idSidikJari=11"+"&satus_door="+statusPintu;
+  int httpCode = http.POST(httpRequestData);
+  
+   
+   
+  String payload = http.getString();
+  
+  Serial.println(payload);
+            
+  http.end();
 
 }
 
@@ -305,13 +425,13 @@ void responDaftar1()
  
 String payload = http.getString();
 Serial.println(httpCode);
-Serial.print ("Ini Pesan Nya");
+Serial.print ("Mengirim respon Mikrokontroler 1");
 Serial.println(payload);          
  
 
 
 http.end();
-delay(10000);  
+  
 
 }
 
@@ -328,13 +448,11 @@ int httpCode = http.POST(httpRequestData);
  
 String payload = http.getString();
 Serial.println(httpCode);
-Serial.print ("Ini Pesan Nya");
+Serial.print ("Mengirim Respon daftar sidik jari 2 ke server");
 Serial.println(payload);          
  
-
-
 http.end();
-delay(10000);  
+  
 
 }
 
@@ -346,14 +464,12 @@ void resetDevice()
   http.begin (resetDeviceHost);  
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   String httpRequestData = "device_key="+deviceKey;
-int httpCode = http.POST(httpRequestData);
+  int httpCode = http.POST(httpRequestData);
  
- 
- 
-String payload = http.getString();
-Serial.println(httpCode);
-Serial.print ("Ini Pesan Nya");
-Serial.println(payload);          
+  String payload = http.getString();
+  Serial.println(httpCode);
+  Serial.print ("Melakukan Respon Reset Server.");
+  Serial.println(payload);          
  
 
 
@@ -420,6 +536,7 @@ uint8_t getFingerprintID() {
     lcd.print("Akses Di Tolak");
     lcd.setCursor(0,1);
     lcd.print("Tidak Terdaftar");
+    tapingFlase();
     delay(1000);
     return p;
   } else {
@@ -428,14 +545,30 @@ uint8_t getFingerprintID() {
   }   
   
   // found a match!
-  Serial.print("Found ID #"); Serial.print(finger.fingerID); 
+  Serial.print("Found ID #"); Serial.print(finger.fingerID);
+  idxSidikJari = finger.fingerID;
   Serial.print(" with confidence of "); Serial.println(finger.confidence); 
   lcd.clear();
   lcd.setCursor(1,0);
   lcd.print("Akses Berhasil");
   lcd.setCursor(4,1);
   lcd.print("Welcome");
-  selenoitOK();
+
+  if (statusPintu == "close")
+  {
+    taping();
+    doorOpen();
+    statusPintu = "open";
+  }else if (statusPintu == "open")
+  {
+
+    taping();
+    doorClose();
+    statusPintu = "close";
+    
+  }
+
+ 
   delay(1000);
 
   return finger.fingerID;
@@ -482,4 +615,158 @@ Serial.println(ssid);
   lcd.print(ssid);
 
   
+}
+
+
+uint8_t getFingerprintEnroll() {
+
+  int p = -1;
+  Serial.print("Waiting for valid finger to enroll as #"); Serial.println(idx);
+  while (p != FINGERPRINT_OK) {
+    p = finger.getImage();
+    switch (p) {
+    case FINGERPRINT_OK:
+      Serial.println("Image taken");
+      break;
+    case FINGERPRINT_NOFINGER:
+      Serial.println(".");
+      break;
+    case FINGERPRINT_PACKETRECIEVEERR:
+      Serial.println("Communication error");
+      break;
+    case FINGERPRINT_IMAGEFAIL:
+      Serial.println("Imaging error");
+      break;
+    default:
+      Serial.println("Unknown error");
+      break;
+    }
+  }
+
+  // OK success!
+
+  p = finger.image2Tz(1);
+  switch (p) {
+    case FINGERPRINT_OK:
+      Serial.println("Image converted");
+      break;
+    case FINGERPRINT_IMAGEMESS:
+      Serial.println("Image too messy");
+      return p;
+    case FINGERPRINT_PACKETRECIEVEERR:
+      Serial.println("Communication error");
+      return p;
+    case FINGERPRINT_FEATUREFAIL:
+      Serial.println("Could not find fingerprint features");
+      return p;
+    case FINGERPRINT_INVALIDIMAGE:
+      Serial.println("Could not find fingerprint features");
+      return p;
+    default:
+      Serial.println("Unknown error");
+      return p;
+  }
+  
+  Serial.println("Remove finger");
+  delay(2000);
+  p = 0;
+  while (p != FINGERPRINT_NOFINGER) {
+    p = finger.getImage();
+  }
+  Serial.print("ID "); Serial.println(idx);
+  p = -1;
+  Serial.println("Place same finger again");
+  while (p != FINGERPRINT_OK) {
+    p = finger.getImage();
+    switch (p) {
+    case FINGERPRINT_OK:
+      Serial.println("Image taken");
+      break;
+    case FINGERPRINT_NOFINGER:
+      Serial.print(".");
+      break;
+    case FINGERPRINT_PACKETRECIEVEERR:
+      Serial.println("Communication error");
+      break;
+    case FINGERPRINT_IMAGEFAIL:
+      Serial.println("Imaging error");
+      break;
+    default:
+      Serial.println("Unknown error");
+      break;
+    }
+  }
+
+  // OK success!
+
+  p = finger.image2Tz(2);
+  switch (p) {
+    case FINGERPRINT_OK:
+      Serial.println("Image converted");
+      break;
+    case FINGERPRINT_IMAGEMESS:
+      Serial.println("Image too messy");
+      return p;
+    case FINGERPRINT_PACKETRECIEVEERR:
+      Serial.println("Communication error");
+      return p;
+    case FINGERPRINT_FEATUREFAIL:
+      Serial.println("Could not find fingerprint features");
+      return p;
+    case FINGERPRINT_INVALIDIMAGE:
+      Serial.println("Could not find fingerprint features");
+      return p;
+    default:
+      Serial.println("Unknown error");
+      return p;
+  }
+  
+  // OK converted!
+  Serial.print("Creating model for #");  Serial.println(idx);
+  
+  p = finger.createModel();
+  if (p == FINGERPRINT_OK) {
+    Serial.println("Prints matched!");
+  } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
+    Serial.println("Communication error");
+    return p;
+  } else if (p == FINGERPRINT_ENROLLMISMATCH) {
+    Serial.println("Fingerprints did not match");
+    return p;
+  } else {
+    Serial.println("Unknown error");
+    return p;
+  }   
+  
+  Serial.print("ID "); Serial.println(idx);
+  p = finger.storeModel(idx);
+  if (p == FINGERPRINT_OK) {
+    Serial.println("Stored!");
+    responDaftar2();
+    delay(3000);
+    return 1;
+  } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
+    Serial.println("Communication error");
+    return p;
+  } else if (p == FINGERPRINT_BADLOCATION) {
+    Serial.println("Could not store in that location");
+    return p;
+  } else if (p == FINGERPRINT_FLASHERR) {
+    Serial.println("Error writing to flash");
+    return p;
+  } else {
+    Serial.println("Unknown error");
+    return p;
+  }   
+}
+
+
+String bacaEEPROM()
+{
+  String esid;
+  for (int i = 0; i < charLength; ++i)
+    {
+      esid += char(EEPROM.read(i));
+    }
+  return esid;
 }
