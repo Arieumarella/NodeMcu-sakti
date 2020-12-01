@@ -9,7 +9,7 @@
 #include <Adafruit_Fingerprint.h>
 #include <SoftwareSerial.h>
 
-#define relayPin 16
+#define relayPin 13
 
 SoftwareSerial mySerial(D5, D6);
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
@@ -73,8 +73,12 @@ delay(2000);
 
 finger.begin(57600);
 
- myServo.attach(D7); 
+ myServo.attach(D8); 
+ digitalWrite(relayPin, LOW);
+ delay(1000);
  myServo.write(pintuTutup); 
+ delay(100);
+digitalWrite(relayPin, HIGH);
 
 welcome();
 delay(3000);
@@ -291,10 +295,10 @@ void doorOpen()
   digitalWrite(relayPin, HIGH);
 
    lcd.clear();
-   lcd.setCursor(3,0);
+   lcd.setCursor(2,0);
    lcd.print("Pintu Berhasil");
    lcd.setCursor(5,1);
-   lcd.print("DI BUKA");
+   lcd.print("Di Buka");
    delay(1000);
 }
 
@@ -308,10 +312,10 @@ void doorClose()
   digitalWrite(relayPin, HIGH);
 
    lcd.clear();
-   lcd.setCursor(3,0);
+   lcd.setCursor(2,0);
    lcd.print("Pintu Berhasil");
    lcd.setCursor(5,1);
-   lcd.print("DI TUTUP");
+   lcd.print("Di Tutup");
    delay(1000);
 }
 
@@ -400,8 +404,6 @@ void tapingFlase()
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   String httpRequestData = "device_key="+deviceKey+"&idSidikJari=11"+"&satus_door="+statusPintu;
   int httpCode = http.POST(httpRequestData);
-  
-   
    
   String payload = http.getString();
   
@@ -556,15 +558,16 @@ uint8_t getFingerprintID() {
 
   if (statusPintu == "close")
   {
+    statusPintu = "open";
     taping();
     doorOpen();
-    statusPintu = "open";
+    
   }else if (statusPintu == "open")
   {
-
+    statusPintu = "close";
     taping();
     doorClose();
-    statusPintu = "close";
+    
     
   }
 
@@ -672,6 +675,7 @@ uint8_t getFingerprintEnroll() {
   p = 0;
   while (p != FINGERPRINT_NOFINGER) {
     p = finger.getImage();
+    delay(1000);
   }
   Serial.print("ID "); Serial.println(idx);
   p = -1;
