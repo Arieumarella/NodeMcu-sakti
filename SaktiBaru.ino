@@ -11,6 +11,7 @@
 
 #define relayPin 13
 
+// Deklarasi Kebutuhan Sensor Sidik Jari
 SoftwareSerial mySerial(D5, D6);
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 uint8_t idx;
