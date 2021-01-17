@@ -31,11 +31,11 @@ String statusDoor = "";
 int idxSidikJari;
 
 //Host API
-String getDeviceHost = "http://192.168.100.199/Iot-Sakti/Api/device";
-String responDaftar1Host = "http://192.168.100.199/Iot-Sakti/Api/respondDevice1";
-String responDaftar2Host = "http://192.168.100.199/Iot-Sakti/Api/respondDevice2";
-String resetDeviceHost   = "http://192.168.100.199/Iot-Sakti/Api/risetDevice";
-String taapingHost = "http://192.168.100.199/Iot-Sakti/Api/taping";
+String getDeviceHost = "http://192.168.100.54/Iot-Sakti/Api/device";
+String responDaftar1Host = "http://192.168.100.54/Iot-Sakti/Api/respondDevice1";
+String responDaftar2Host = "http://192.168.100.54/Iot-Sakti/Api/respondDevice2";
+String resetDeviceHost   = "http://192.168.100.54/Iot-Sakti/Api/risetDevice";
+String taapingHost = "http://192.168.100.54/Iot-Sakti/Api/taping";
 
 WiFiClient client;
 
@@ -252,6 +252,7 @@ if ((unsigned long)(waktuSekarang2 - waktuSebelum2) >= interval2)
      if (idx == 0){
        Serial.println("Menunggu Id Sidik Jari Dari server.");
        lcd.clear();
+       delay(50);
        lcd.setCursor(0,0);
        lcd.print("Menunggu Id Jari");
        lcd.setCursor(1,1);
@@ -263,10 +264,15 @@ if ((unsigned long)(waktuSekarang2 - waktuSebelum2) >= interval2)
        Serial.println("Daata Masuk dengan Id Sidik Jari "+idx);
         Serial.println(idx);
        lcd.clear();
+       delay(50);
        lcd.setCursor(3,0);
        lcd.print("Data Masuk");
+       lcd.clear();
+       lcd.setCursor(1,0);
+       lcd.print("Silakan Taping");
        lcd.setCursor(0,1);
-       lcd.print("Id Jari adalah "+idx);
+       lcd.print("Sidik Jari Anda,");
+       delay(50);
       delay(3000);
       while (!  getFingerprintEnroll() )
       {delay(2000);};
@@ -274,11 +280,12 @@ if ((unsigned long)(waktuSekarang2 - waktuSebelum2) >= interval2)
       resetDevice();
 
        lcd.clear();
+       delay(50);
        lcd.setCursor(0,0);
        lcd.print("Daftar Sidik Jari");
        lcd.setCursor(5,1);
        lcd.print("Berhasil");
-       delay(2000);
+       delay(3000);
   }
   waktuSebelum2 = millis();
 }
@@ -392,8 +399,6 @@ void taping()
   lcd.clear();
   lcd.setCursor(2,0);
   lcd.print("Berhasil.");
-  lcd.setCursor(2,1);
-  lcd.print("Welcome");
   }
 }
 
@@ -554,8 +559,6 @@ uint8_t getFingerprintID() {
   lcd.clear();
   lcd.setCursor(1,0);
   lcd.print("Akses Berhasil");
-  lcd.setCursor(4,1);
-  lcd.print("Welcome");
 
   if (statusPintu == "close")
   {
@@ -670,8 +673,15 @@ uint8_t getFingerprintEnroll() {
       Serial.println("Unknown error");
       return p;
   }
+
   
+//  Status OK 1
   Serial.println("Remove finger");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Tapping Berhasil");
+  lcd.setCursor(1,1);
+  lcd.print("Ulangi Tapping");
   delay(2000);
   p = 0;
   while (p != FINGERPRINT_NOFINGER) {
@@ -748,6 +758,12 @@ uint8_t getFingerprintEnroll() {
   if (p == FINGERPRINT_OK) {
     Serial.println("Stored!");
     responDaftar2();
+    Serial.println("Remove finger");
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Sidik Jari Sudah");
+    lcd.setCursor(3,1);
+    lcd.print("Terdaftar");
     delay(3000);
     return 1;
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
